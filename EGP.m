@@ -144,6 +144,13 @@ classdef EGP < nextgp.GP
         end
         
         function [ymu,ys2] = predictAt(self, k, varargin)
+            % Predict at given time steps (k).
+            % Optional arguments:
+            %   extras - a matrix whose rows are additional inputs to be
+            %               appended to the regressor vectors generated
+            %               from the stored signals.
+            %   the rest will be passed as-is to predict().
+            
             k = k(:);
             ymu = NaN(length(k),1);
             ys2 = NaN(length(k),1);
@@ -163,7 +170,11 @@ classdef EGP < nextgp.GP
                 % 				rethrow(err);
                 % 			end
                 %         end
-                [ymu(RVmask),ys2(RVmask)] = predict(self, xs, varargin{:});
+                if numel(varargin) >= 1 && isnumeric(varargin{1}) && ismatrix(varargin{1})
+                    [ymu(RVmask),ys2(RVmask)] = predict(self, [xs, varargin{1}(RVmask,:)], varargin{2:end});
+                else
+                    [ymu(RVmask),ys2(RVmask)] = predict(self, xs, varargin{:});
+                end
             end
         end
         
