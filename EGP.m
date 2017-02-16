@@ -30,7 +30,7 @@ classdef EGP < nextgp.GP
         forgetting = struct('factor', 1, 'type', 'none');
         
         % Configuration of reducing the training data set
-        reducing = struct('maxSize', NaN, 'type', 'windowing', 'indexLifes', NaN);
+        reducing = struct('maxSize', NaN, 'type', 'windowing'); %, 'indexLifes', NaN);
         
     end
     
@@ -55,14 +55,16 @@ classdef EGP < nextgp.GP
             self = self@nextgp.GP(nextgp.GPData(hyp, meanf, cov, lik, x, y));
             
             self.signals = signals;
-            self.reducing.indexLifes = NaN(signals.m_maxk,2);
+            % self.reducing.indexLifes = NaN(signals.m_maxk,2);
             
             self.BVtst = k;
             self.m_size = size(self.BVtst, 1);
             
+            %{
             for ii = 1:length(k)
                 self.reducing.indexLifes(k(ii),:) = [signals.time(k(ii)),Inf];
             end
+            %}
             
             if ~iscell(inf), inf = {inf}; end
             
@@ -134,9 +136,11 @@ classdef EGP < nextgp.GP
             self.BVtst(end+1:end+N, :) = k;
             self.m_size = size(self.BVtst, 1);
             
+            %{
             for ii = 1:length(k)
                 self.reducing.indexLifes(k(ii),:) = [self.signals.time(k(ii)),Inf];
             end
+            %}
         end
         
         function [ymu,ys2] = predictAt(self, k, varargin)
@@ -224,10 +228,11 @@ classdef EGP < nextgp.GP
                 %~ fprintf('reduced data timestamps: %s\n',num2str(timestamps(id)));
                 fprintf('                worsest information gain element is at k-%d step with value (%d)\n' ,max(self.BVtst)-informationGain(end,2),informationGain(end,1));
                 
+                %{
                 for i = 1:length(id)
                     self.reducing.indexLifes(id(i),2) = self.signals.time(id(i));
                 end
-                
+                %}
             end
             self.m_size = size(self.gpdata.training_data.x, 1);
         end

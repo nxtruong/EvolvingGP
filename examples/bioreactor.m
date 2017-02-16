@@ -5,6 +5,7 @@ proc.noisestd=1e-3;
 u=proc.getidentsignal();
 proc.init();
 N=length(u);
+N = 110;
 
 % select which regressors will be used for modelling:
 %  create a struct where each property is a signal name with its regressors (the delayed signals)
@@ -13,7 +14,7 @@ inps.y=[1,2];
 
 % SIGNALS -----------
 %Instantiate a 'signals' object called "es" and allocate him a memory by giving the length of our signal: N
-es=SignalsModel(N);
+es=SignalsModel();
 %tell which regressors should we use:
 %	The method setInputs creates signals inside the object es with same names as defined in "inps"
 es.setInputs(inps);			
@@ -36,7 +37,7 @@ end
 e = EGP(es, 'infExact', hyp, 'meanZero', 'covSEard', 'likGauss', es.m_maxlag+1:10);					%instantiate the EGP-model class
 
 e.hypOptim.iter=10;			%set how much iterations should we do for opt.
-e.reducing.maxSize=50;		%set the maximum size of active set
+e.reducing.maxSize=100;		%set the maximum size of active set
 
 %the following property defines the method for calculation of information gain:
 %	-the higher infromation gain for an excluded element, the lesser chance that
@@ -68,7 +69,7 @@ for k=11:N
 	
 	% if abs(error)>tolerance then update the model with new regressor 
     %							vector and regressand at time-step "k"
-    if abs(yp_mu(k)-es.Signals.y(k))>0.005
+    if abs(yp_mu(k)-es.Signals.getSignal('y', k))>0.005
         e.include(k);				% increase the active set by one
         e.optimizePrior();			% optimize hyps
         e.reduce();					% reduce the active set. The method verifies the size of active set by itself
@@ -76,9 +77,9 @@ for k=11:N
 end
 
 ax(1)=subplot(2,1,1);
-plot(1:N,es.Signals.y,'b',1:N-1,yp_mu(2:end),'g');
+plot(1:N,es.Signals.getSignal('y', 1:N),'b',1:N-1,yp_mu(2:end),'g');
 ax(2)=subplot(2,1,2);
-plot(es.Signals.u);
+plot(es.Signals.getSignal('u', 1:N));
 linkaxes(ax,'x');
 
 proc.delete();

@@ -2,9 +2,8 @@ classdef SignalsModel < handle
     % Class to manage the MISO signals in and out of a GP model.
     
     properties(GetAccess=public,SetAccess=public)
-        time;
+        % time;
         m_k;
-        m_maxk;
         m_maxlag;
         m_Nregressors;
         
@@ -20,40 +19,45 @@ classdef SignalsModel < handle
     end
         
     methods
-        function self = SignalsModel(N)
+        function self = SignalsModel(other)
             % Construct the SignalsModel object.
-            %   SignalsModel(N)
-            % Inputs:
-            %   N   - Maximum number of data points.
-            
-            self.m_maxk = N;
-            self.time = NaN(N,1);
+            % If other is given, which is a SignalsModel object or a
+            % SignalsValues object, the Signal value source is shared.
+            % Else, create a new SignalsValues object to store the values.
+
+            %self.time = NaN(N,1);
             self.m_k = 0;
             self.normalize = false;
             self.m_mean = struct;
             self.m_std = struct;
+            
+            if nargin > 0
+                if isa(other, 'SignalsValues')
+                    self.Signals = other;
+                elseif isa(other, 'SignalsModel')
+                    self.Signals = other.Signals;
+                else
+                    error('Invalid argument of class %s.', class(other));
+                end
+            else
+                self.Signals = SignalsValues();
+            end
         end
         
         function setValue(self, signal, value, k)
             % Set the value of a signal at time/index k.
             % Do not update m_k nor the statistical moments.
-            assert(k <= self.m_maxk);
-            self.Signals.(signal)(k) = value;
+            self.Signals.setSignal(signal, k, value);
         end
         
         function appendValues(self, varargin)
-            % Advance m_k by one step and append the values of the signals,
-            % unless m_k is already >= m_maxk.
+            % Advance m_k by one step and append the values of the signals.
             % The values can be entered in two ways:
             % - By a structure whose fields are signal names.
             % - By pairs of 'signalname', value.
             % Signals that are not set will keep the current value
             % (default: NaN).
             
-            if self.m_k >= self.m_maxk
-                warning('Current time step is already at the maximum size.');
-                return;
-            end
             self.m_k = self.m_k + 1;
             
             if nargin == 1, return; end
@@ -71,7 +75,7 @@ classdef SignalsModel < handle
             for ii = 1:numel(flds)
                 fld = flds{ii};
                 if isfield(self.Signals, fld)
-                    self.Signals.(fld)(self.m_k) = values.(fld);
+                    self.Signals.setSignal(fld, self.m_k, values.(fld));
                 end
             end
             
@@ -112,7 +116,7 @@ classdef SignalsModel < handle
                 end
                 
                 nr = numel(self.m_Ilags{i});
-                x(:,j:j+nr-1) = self.Signals.(self.m_I{i})(bsxfun(@minus,k,self.m_Ilags{i}));
+                x(:,j:j+nr-1) = self.Signals.getSignal(self.m_I{i}, bsxfun(@minus,k,self.m_Ilags{i}));
                 if self.normalize
                     x(:,j:j+nr-1) = (x(:,j:j+nr-1) - self.m_mean.(self.m_I{i}))./self.m_std.(self.m_I{i});
                 end
@@ -128,7 +132,7 @@ classdef SignalsModel < handle
             if nargin == 1, k = self.m_k; end
             k = k(:);
             
-            t = self.Signals.(self.m_O)(k);
+            t = self.Signals.getSignal(self.m_O, k);
             if self.normalize
                 t = (t-self.m_mean.(self.m_O))./self.m_std.(self.m_O);
             end
@@ -169,7 +173,9 @@ classdef SignalsModel < handle
             self.m_I = cell(1, Nin);
             self.m_Ilags = cell(1, Nin);
             for i = 1:Nin
-                self.Signals.(signalnames{i}) = NaN(self.m_maxk,1);
+                if ~isfield(self.Signals, signalnames{i})
+                    self.Signals.addSignal(signalnames{i});
+                end
                 self.m_I{i} = signalnames{i};
                 self.m_Ilags{i} = inputs.(signalnames{i});
                 self.m_mean.(signalnames{i}) = NaN;
@@ -185,10 +191,10 @@ classdef SignalsModel < handle
             %
             % set the output (target) signal for modelling
             if ~isfield(self.Signals, output)
-                self.Signals.(output) = NaN(self.m_maxk, 1);
-                self.m_mean.(output) = NaN;
-                self.m_std.(output) = NaN;
+                self.Signals.addSignal(output);
             end
+            self.m_mean.(output) = NaN;
+            self.m_std.(output) = NaN;
             self.m_O = output;
             self.m_Noutputs = 1;
         end
@@ -224,11 +230,11 @@ classdef SignalsModel < handle
             for i = 1:self.m_Ninputs
                 if (inputs_without_regressors(i)==1), continue; end
                 nr = numel(self.m_Ilags{i});
-                x(:,j:j+nr-1) = self.Signals.(self.m_I{i})(bsxfun(@minus,k1,self.m_Ilags{i}));
+                x(:,j:j+nr-1) = self.Signals.getSignal(self.m_I{i}, bsxfun(@minus,k1,self.m_Ilags{i}));
                 j = j + nr;
             end
             
-            o = self.Signals.(self.m_O)(k1);
+            o = self.Signals.getSignal(self.m_O, k1);
             xsum = sum(x,2);
             nanx = isnan(xsum);
             nano = isnan(o);
@@ -247,17 +253,17 @@ classdef SignalsModel < handle
         function updateStatMoments(self)
             % select only signal segments without NaN values
             for i = 1:self.m_Ninputs
-                notNaNs = ~isnan(self.Signals.(self.m_I{i}));
+                notNaNs = ~isnan(self.Signals.getSignal(self.m_I{i}));
                 if sum(notNaNs) > 1
-                    self.m_mean.(self.m_I{i}) = mean(self.Signals.(self.m_I{i})(notNaNs));
-                    self.m_std.(self.m_I{i}) = std(self.Signals.(self.m_I{i})(notNaNs));
+                    self.m_mean.(self.m_I{i}) = mean(self.Signals.getSignal(self.m_I{i}, notNaNs));
+                    self.m_std.(self.m_I{i}) = std(self.Signals.getSignal(self.m_I{i}, notNaNs));
                 end
             end
         end
         
         function new = copy(self)
             % Copy super_prop
-            new = feval(class(self), self.m_maxk);
+            new = feval(class(self));
             % Copy sub_prop1 in subclass
             % Assignment can introduce side effects
             new.setInputs(cell2struct(self.m_Ilags,self.m_I,2));
@@ -265,7 +271,7 @@ classdef SignalsModel < handle
             
             new.Signals = self.Signals; % copy signal data
 
-            new.time = self.time;
+            %new.time = self.time;
             new.m_k = self.m_k;
             new.m_mean = self.m_mean;
             new.m_std = self.m_std;
