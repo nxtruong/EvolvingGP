@@ -20,24 +20,22 @@ es.setInputs(inps);
 % tell which signal is the regressand (the target data)
 es.setOutput('y');			
 
-%since we already defined whole input signal u, we define it again inside the signals object:
-es.u=u(:);
-
-%Allocate additional two signals to object 'es'. To store predicted model (mu, se2).
-%We specifically want additional signals. They will be used for storing predictions of our model.
-addprop(es,'yp_mu');
-addprop(es,'yp_se2');
 
 % EGP -----------
-e=EGP(es);					%instantiate the EGP-model class
-
-D=es.Nregressors;
+D = es.m_Nregressors;
 hyp.cov= ones(eval(covSEard()),1);
 hyp.lik=1;
 hyp.mean=[];
-e.resetPrior(hyp);				%initialize hyperparameters 
-%e.resetPrior(100);				%initialize hyperparameters 
-e.hypOptim.iter=5;			%set how much iterations should we do for opt.
+
+% Run the process for some steps to get initial training data
+for k = 1:10
+    proc.setu(u(k));				% apply the current input signal value to the process
+    es.appendValues('u', u(k), 'y', proc.gety());
+end
+
+e = EGP(es, 'infExact', hyp, 'meanZero', 'covSEard', 'likGauss', es.m_maxlag+1:10);					%instantiate the EGP-model class
+
+e.hypOptim.iter=10;			%set how much iterations should we do for opt.
 e.reducing.maxSize=50;		%set the maximum size of active set
 
 %the following property defines the method for calculation of information gain:
@@ -53,30 +51,34 @@ e.reducing.maxSize=50;		%set the maximum size of active set
 %		Hint: if the method is named without the min/max prefix, the default is max value of the method result.
 e.reducing.type='maxeuclid';%what should the information gain of a single (active set) element equal to.
 
-for k=1:N
-	es.k=k; %optional: 		tell the 'signals' object which is the current time-step
-	
-	es.y(k)=proc.gety();	%simulate the process and get the current output
-    if k>50 && k<60 | k>400 && k<470
-        es.y(k)=NaN;					% let y(k) cannot be measured for 51<k<59 and 401<k<470
+yp_mu = NaN(N,1);
+yp_se2 = NaN(N,1);
+
+for k=11:N
+    proc.setu(u(k));				% apply the current input signal value to the process
+    es.appendValues('u', u(k), 'y', proc.gety());
+    
+    %{
+    if k>50 && k<60 || k>400 && k<470
+        es.setValue('y', NaN, k);					% let y(k) cannot be measured for 51<k<59 and 401<k<470
     end	
-	[es.yp_mu(k), es.yp_se2(k)]=e.predict(k-1);	%predict the same output with the model
+    %}
+    
+	[yp_mu(k), yp_se2(k)] = e.predictAt(k-1);	%predict the same output with the model
 	
 	% if abs(error)>tolerance then update the model with new regressor 
-	%							vector and regressand at time-step "k"
-	if abs(es.yp_mu(k)-es.y(k))>0.005	
-		e.include(k);				% increase the active set by one
-		e.optimizePrior();			% optimize hyps
-		e.inferPosterior();			% calculate all vectors for fast prediction, e.g., the covariance inverse
-		e.reduce();					% reduce the active set. The method verifies the size of active set by itself
-	end
-	proc.setu(es.u(k));				% apply the current input signal value to the process
+    %							vector and regressand at time-step "k"
+    if abs(yp_mu(k)-es.Signals.y(k))>0.005
+        e.include(k);				% increase the active set by one
+        e.optimizePrior();			% optimize hyps
+        e.reduce();					% reduce the active set. The method verifies the size of active set by itself
+    end
 end
 
 ax(1)=subplot(2,1,1);
-plot(1:N,es.y,'b',1:N-1,es.yp_mu(2:end),'g');
+plot(1:N,es.Signals.y,'b',1:N-1,yp_mu(2:end),'g');
 ax(2)=subplot(2,1,2);
-plot(es.u);
+plot(es.Signals.u);
 linkaxes(ax,'x');
 
 proc.delete();
