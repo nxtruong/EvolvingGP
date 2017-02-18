@@ -52,9 +52,18 @@ classdef SignalsValues < handle
         function v = getSignal(self, name, idx)
             % Get values of given signal with given index idx (if omitted
             % then the entire signal vector).
+            % The vectors will grow if necessary so that idx is always
+            % valid (uninitialized values will be NaN); so beware of
+            % overflowing the memory.
             if nargin < 3
                 v = self.m_signals.(name);
             else
+                % grow if necessary
+                if islogical(idx)
+                    self.grow(numel(idx));
+                else
+                    self.grow(max(idx(:)));
+                end
                 v = self.m_signals.(name)(idx);
             end
         end
@@ -73,6 +82,19 @@ classdef SignalsValues < handle
                 end
                 self.m_signals.(name)(idx) = v;
             end
+        end
+        
+        function truncate(self, N)
+            % Truncate all signals to a given length (N <= current length).
+            if N >= self.m_curSize, return; end
+            
+            % Truncate
+            allprops = fieldnames(self.m_signals);
+            for k = 1:numel(allprops)
+                self.m_signals.(allprops{k})(N+1:end) = [];
+            end
+            
+            self.m_curSize = N;
         end
     end
     
