@@ -84,6 +84,22 @@ classdef SignalsValues < handle
             end
         end
         
+        function s = getAllSignals(self, idx)
+            % Returns all signals in a structure.
+            % If idx is given, only values in those indices will be
+            % returned.
+            if nargin == 1
+                s = self.m_signals;
+                return;
+            end
+            
+            s = struct;
+            allprops = fieldnames(self.m_signals);
+            for k = 1:numel(allprops)
+                s.(allprops{k}) = self.m_signals.(allprops{k})(idx);
+            end
+        end
+        
         function truncate(self, N)
             % Truncate all signals to a given length (N <= current length).
             if N >= self.m_curSize, return; end

@@ -35,30 +35,45 @@ classdef EGP < nextgp.GP
     end
     
     methods
-        function self = EGP(signals, inf, hyp, meanf, cov, lik, k)
+        function self = EGP(signals, inf, hyp, meanf, cov, lik, X, Y)
             % Construct the EvolvingGP object with given signals and from
             % GPML-style parameters.
-            % k is the indices / timestamps in signals that are used to
-            % initialize the training dataset of the GP model.
+            % To initialize the training dataset of the GP model:
+            %   - Give X (training inputs in rows) and Y (training
+            %     targets); or
+            %   - Give only X = K (and Y must be omitted), where K contains
+            %     the indices / timestamps in signals that are used to
+            %     construct the initial training set.
             
             assert(isa(signals, 'SignalsModel'), 'signals must be a SignalsModel object.');
             
-            k = k(:);
-            [RVmask, RSmask] = signals.filterUndefinedDataAt(k, 'warning');
-            k = k(RVmask & RSmask);
-            assert(~isempty(k), 'Initial training data must not be empty.');
+            if ~exist('Y', 'var') || isempty(Y)
+                % X is K = vector of indices
+                k = X(:);
+                [RVmask, RSmask] = signals.filterUndefinedDataAt(k, 'warning');
+                k = k(RVmask & RSmask);
+                assert(~isempty(k), 'Initial training data must not be empty.');
             
-            % New inputs and targets
-            x = signals.getRegressorVectors(k);
-            y = signals.getRegressand(k);
+                % New inputs and targets
+                X = signals.getRegressorVectors(k);
+                Y = signals.getRegressand(k);
+                
+                N = length(k);
+            else
+                N = size(X,1);
+                assert(isvector(Y) && N == size(Y,1), 'Invalid initial training dataset X,Y.');
+                
+                % The timestamps for all training points are 0
+                k = zeros(N,1);
+            end
             
-            self = self@nextgp.GP(nextgp.GPData(hyp, meanf, cov, lik, x, y));
+            self = self@nextgp.GP(nextgp.GPData(hyp, meanf, cov, lik, X, Y));
             
             self.signals = signals;
             % self.reducing.indexLifes = NaN(signals.m_maxk,2);
             
             self.BVtst = k;
-            self.m_size = size(self.BVtst, 1);
+            self.m_size = N;
             
             %{
             for ii = 1:length(k)
@@ -76,6 +91,11 @@ classdef EGP < nextgp.GP
             self.gpml_lik = lik;
         end
         
+        %{
+        This method is disabled because the initial training dataset may
+        not contain points from the stored signals that can be
+        reconstructed.
+        
         function resetActiveSet(self)
             k = self.BVtst;
             self.gpdata.training_data.x = [];
@@ -84,6 +104,7 @@ classdef EGP < nextgp.GP
             
             self.include(k);
         end
+        %}
         
         function resetPrior(self,default)
             if nargin<2, default = 1; end
@@ -225,11 +246,11 @@ classdef EGP < nextgp.GP
             
             exceededSize = self.m_size - self.reducing.maxSize;
             if exceededSize > 0
+                % get sorted information gains
                 if nargin == 1
                     informationGain = self.getInformationGain();
                 end
-                timestamps = informationGain(end-exceededSize+1:end,2);
-                [~, id] = ismember(timestamps, self.BVtst);
+                id = informationGain(end-exceededSize+1:end,2);    % the indices of the points in training dataset to be removed
                 self.gpdata.training_data.x(id, :) = [];
                 self.gpdata.training_data.y(id, :) = [];
                 self.BVtst(id,:) = [];
@@ -237,7 +258,6 @@ classdef EGP < nextgp.GP
                 
                 self.gpdata.updatePosterior();
                 %~ fprintf('reduced data timestamps: %s\n',num2str(timestamps(id)));
-                fprintf('                worsest information gain element is at k-%d step with value (%d)\n' ,max(self.BVtst)-informationGain(end,2),informationGain(end,1));
                 
                 %{
                 for i = 1:length(id)
@@ -253,12 +273,12 @@ classdef EGP < nextgp.GP
             % points.
             % Returns the informationGain matrix of size (Nx2) where the
             % first column contains the information gain values, and the
-            % second column contains the indices.
+            % second column contains the indices of the training points.
             % The matrix is sorted in descending order of the first column.
             
             tst = self.BVtst;
             informationGain = NaN(self.m_size,2);
-            informationGain(:,2) = tst(:);
+            informationGain(:,2) = 1:self.m_size;   % the indices of points in the training set, from 1
             
             switch self.reducing.type(1:3)
                 case 'max'
@@ -340,7 +360,8 @@ classdef EGP < nextgp.GP
         function informationGain = applyForgetting(self, informationGain)
             %
             %
-            % InformationGain is a (Nx2) vector of information gains with corresponding indices.
+            % InformationGain is a (Nx2) vector of information gains with
+            % corresponding indices in the training dataset.
             %
             % apply a forgetting (by sample age) term to an already computed
             % information gain for each sample inside dataset. The forgetting
@@ -348,12 +369,17 @@ classdef EGP < nextgp.GP
             
             % shift information gain to be equal or greater than 0
             informationGain(:,1) = informationGain(:,1) - min(informationGain(:,1));
-            timestampnow = max(informationGain(:,2));
+            
+            % get the timestamps of the corresponding indices in the
+            % informationGain
+            tst = vec(self.BVtst(informationGain(:,2)));
+            timestampnow = max(tst);
+            
             switch self.forgetting.type
                 case 'linear'
-                    informationGain(:,1) = informationGain(:,1) - self.forgetting.factor.*(timestampnow-informationGain(:,2));
+                    informationGain(:,1) = informationGain(:,1) - self.forgetting.factor.*(timestampnow-tst);
                 case 'exponential'
-                    informationGain(:,1) = informationGain(:,1).*self.forgetting.factor.^(timestampnow-informationGain(:,2));
+                    informationGain(:,1) = informationGain(:,1).*self.forgetting.factor.^(timestampnow-tst);
                 case 'none'
                     % do nothing
                 otherwise

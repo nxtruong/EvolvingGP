@@ -44,7 +44,7 @@ classdef SignalsModel < handle
             end
         end
         
-        function setValue(self, signal, value, k)
+        function setValue(self, signal, k, value)
             % Set the value of a signal at time/index k.
             % Do not update m_k nor the statistical moments.
             self.Signals.setSignal(signal, k, value);
