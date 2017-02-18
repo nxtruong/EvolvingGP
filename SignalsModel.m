@@ -108,6 +108,8 @@ classdef SignalsModel < handle
             k = k(:);
             n = length(k);
             x = NaN(n, self.m_Nregressors);
+            if n == 0, return; end
+            
             j = 1;
             inputs_without_regressors = cellfun(@isempty,self.m_Ilags);
             for i = 1:self.m_Ninputs
@@ -122,7 +124,7 @@ classdef SignalsModel < handle
                 end
                 j = j + nr;
             end
-            if any(any(isnan(x))) && opt==0
+            if opt==0 && any(any(isnan(x)))
                 error('SignalsModel:InvalidSignalIndex','Invalid regressor values.');
             end
         end

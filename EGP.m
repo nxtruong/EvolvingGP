@@ -109,7 +109,7 @@ classdef EGP < nextgp.GP
         function resetPrior(self,default)
             if nargin<2, default = 1; end
             
-            D = self.signals.Nregressors;
+            D = self.signals.m_Nregressors;
             if nargin==2 && isstruct(default)
                 self.gpml_hyp = default;
             else
@@ -134,22 +134,37 @@ classdef EGP < nextgp.GP
             self.gpdata.updatePosterior();
         end
         
-        function include(self,k)
-            % Append given indices K in the signals model to the training data
-            % set.
+        function include(self, x, t, k)
+            % Append new data points (X,T), where X are rows of inputs and
+            % T are corresponding targets, to the training data set.
+            % If T is omitted, X contains indices in the signals model for
+            % the new data points.
+            %
+            % When both (x,t) are given, an optional argument k can be
+            % given after t, which contains the indices (or timestamps) of
+            % the new data points. Otherwise, the current step m_k of the
+            % signal model will be used.
             
-            k=k(:);
+            if nargin < 3 || isempty(Y)
+                k = x(:);
             
-            [RVmask, RSmask] = self.signals.filterUndefinedDataAt(k, 'warning');
-            k = k(RVmask & RSmask);
-            if isempty(k), return; end
+                [RVmask, RSmask] = self.signals.filterUndefinedDataAt(k, 'warning');
+                k = k(RVmask & RSmask);
+                if isempty(k), return; end
             
-            % New inputs and targets
-            x = self.signals.getRegressorVectors(k);
-            t = self.signals.getRegressand(k);
-            
-            N = length(k);
-            
+                % New inputs and targets
+                x = self.signals.getRegressorVectors(k);
+                t = self.signals.getRegressand(k);
+                
+                N = length(k);
+            else
+                N = size(x, 1);
+                t = t(:);
+                
+                if nargin >= 4
+                    k = k(:);
+                end
+            end
             self.gpdata.training_data.x(end+1:end+N,:) = x;
             self.gpdata.training_data.y(end+1:end+N,:) = t;
             self.gpdata.updatePosterior();  % because we change the training dataset
@@ -229,11 +244,11 @@ classdef EGP < nextgp.GP
                 return;
             end
             if self.hypOptim.enable
-                [self.gpml_hyp, ~] = feval(self.hypOptim.optimizer,...
+                [newhyps, ~] = feval(self.hypOptim.optimizer,...
                     self.gpml_hyp, @gp, self.hypOptim.iter,...
                     self.gpml_inf,self.gpml_mean, self.gpml_cov, self.gpml_lik,...
                     self.gpdata.training_data.x, self.gpdata.training_data.y);
-                self.gpdata.updatePosterior();
+                self.resetPrior(newhyps);
             else
                 warning('Hyperparameter optimization is configured to be disabled! Nothing to be done. Leaving...');
             end
