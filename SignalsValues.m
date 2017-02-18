@@ -93,11 +93,7 @@ classdef SignalsValues < handle
                 return;
             end
             
-            s = struct;
-            allprops = fieldnames(self.m_signals);
-            for k = 1:numel(allprops)
-                s.(allprops{k}) = self.m_signals.(allprops{k})(idx);
-            end
+            s = structfun(@(v) v(idx), self.m_signals, 'UniformOutput', false);
         end
         
         function truncate(self, N)
