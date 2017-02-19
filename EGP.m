@@ -109,7 +109,11 @@ classdef EGP < nextgp.GP
         function resetPrior(self,default)
             if nargin<2, default = 1; end
             
-            D = self.signals.m_Nregressors;
+            % This may not work correctly because the signals model may not contain all necessary regressors of the GP
+            % D = self.signals.m_Nregressors;
+            
+            D = self.gpdata.input_dim;
+            
             if nargin==2 && isstruct(default)
                 self.gpml_hyp = default;
             else
@@ -140,12 +144,12 @@ classdef EGP < nextgp.GP
             % If T is omitted, X contains indices in the signals model for
             % the new data points.
             %
-            % When both (x,t) are given, an optional argument k can be
-            % given after t, which contains the indices (or timestamps) of
+            % When both (X,T) are given, an optional argument k can be
+            % given after T, which contains the indices (or timestamps) of
             % the new data points. Otherwise, the current step m_k of the
             % signal model will be used.
             
-            if nargin < 3 || isempty(Y)
+            if nargin < 3 || isempty(t)
                 k = x(:);
             
                 [RVmask, RSmask] = self.signals.filterUndefinedDataAt(k, 'warning');

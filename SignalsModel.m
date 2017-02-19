@@ -263,6 +263,7 @@ classdef SignalsModel < handle
             end
         end
         
+        %{
         function new = copy(self)
             % Copy super_prop
             new = feval(class(self));
@@ -279,6 +280,7 @@ classdef SignalsModel < handle
             new.m_std = self.m_std;
             new.normalize = self.normalize;
         end
+        %}
         
         function quiet(self,id,msg)
             %empty function: is a quiet function, it isn't?
