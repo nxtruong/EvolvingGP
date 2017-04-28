@@ -84,10 +84,17 @@ classdef EGP < nextgp.GP
             if ~iscell(inf), inf = {inf}; end
             
             % Save the GPML parameters
+            if ~iscell(inf), inf = {inf}; end
             self.gpml_inf = inf;
+            
             self.gpml_hyp = hyp;
+            
+            if ~iscell(meanf), meanf = {meanf}; end
             self.gpml_mean = meanf;
+            
+            if ~iscell(cov), cov = {cov}; end
             self.gpml_cov = cov;
+            
             self.gpml_lik = lik;
         end
         
@@ -312,9 +319,9 @@ classdef EGP < nextgp.GP
             end
             
             switch reducingmethod
-                case 'likelihood'
+                case 'likelihood'                    
                     for i = 1:self.m_size
-                        [~,nlZ] = feval(self.gpml_inf{:}, self.gpml_hyp, self.gpml_mean, self.gpml_cov, self.gpml_lik{1}, self.gpdata.training_data.x([1:i-1,i+1:end],:), self.gpdata.training_data.y([1:i-1,i+1:end]));
+                        [~,nlZ] = feval(self.gpml_inf{:}, self.gpml_hyp, self.gpml_mean, self.gpml_cov, self.gpml_lik, self.gpdata.training_data.x([1:i-1,i+1:end],:), self.gpdata.training_data.y([1:i-1,i+1:end]));
                         informationGain(i,1) = -nlZ*sig;
                     end
                 case 'optimizedlikelihood'
@@ -333,7 +340,7 @@ classdef EGP < nextgp.GP
                     % result
                     D(1:(self.m_size+1):end) = NaN;
                     
-                    informationGain(:,1) = min(D,[],2);
+                    informationGain(:,1) = min(D,[],2) * sig;
                     
                     %{
                     D1 = zeros(self.m_size*(self.m_size-1)/2, 2);  % first column = distance, second column = index
