@@ -398,7 +398,7 @@ classdef EGP < nextgp.GP
             
             % get the timestamps of the corresponding indices in the
             % informationGain
-            tst = vec(self.BVtst(informationGain(:,2)));
+            tst = reshape(self.BVtst(informationGain(:,2)),[],1);
             timestampnow = max(tst);
             
             switch self.forgetting.type

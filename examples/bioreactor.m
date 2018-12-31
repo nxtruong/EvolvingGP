@@ -37,7 +37,7 @@ end
 e = EGP(es, 'infExact', hyp, 'meanZero', 'covSEard', 'likGauss', es.m_maxlag+1:10);					%instantiate the EGP-model class
 
 e.hypOptim.iter=10;			%set how much iterations should we do for opt.
-e.reducing.maxSize=100;		%set the maximum size of active set
+e.reducing.maxSize=50;		%set the maximum size of active set
 
 %the following property defines the method for calculation of information gain:
 %	-the higher infromation gain for an excluded element, the lesser chance that
